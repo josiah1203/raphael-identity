@@ -1,0 +1,12 @@
+openapi: 3.1.0
+info:
+  title: raphael-identity
+  version: 0.1.0
+  description: Login, SSO, MFA, sessions, devices, API keys
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: OK
