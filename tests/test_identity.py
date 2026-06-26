@@ -18,9 +18,12 @@ def test_dev_seed_login() -> None:
 
 
 def test_register_login() -> None:
+    import uuid
+
     client = TestClient(app)
-    reg = client.post("/v1/identity/register", json={"email": "test@raphael.app", "password": "securepass1"})
+    email = f"test-{uuid.uuid4().hex[:8]}@raphael.app"
+    reg = client.post("/v1/identity/register", json={"email": email, "password": "securepass12"})
     assert reg.status_code == 200
     assert "access_token" in reg.json()
-    login = client.post("/v1/identity/login", json={"email": "test@raphael.app", "password": "securepass1"})
+    login = client.post("/v1/identity/login", json={"email": email, "password": "securepass12"})
     assert login.status_code == 200

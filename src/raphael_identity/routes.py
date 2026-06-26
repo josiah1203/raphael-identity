@@ -7,18 +7,27 @@ from typing import Any
 
 from fastapi import APIRouter, Header, HTTPException
 
-from raphael_identity.auth import AuthService
+from raphael_identity.hblabs.auth.passwords import HibpClient
+from raphael_identity.hblabs.auth.service import AuthService
+from raphael_identity.hblabs.db import PlatformStore
 from raphael_identity.models import ApiKeyBody, AuthBody, RegisterBody
 from raphael_identity.seed import seed_dev_user
-from raphael_identity.store import IdentityStore
 
 router = APIRouter(tags=["identity"])
 
-_store = IdentityStore()
+
+class _NoHibp(HibpClient):
+    def is_pwned(self, password: str) -> bool:
+        return False
+
+
+_db = os.environ.get("RAPHAEL_IDENTITY_DB", "/tmp/raphael-identity.db")
+_store = PlatformStore(_db)
 _auth = AuthService(
     _store,
     jwt_secret=os.environ.get("RAPHAEL_JWT_SECRET", "dev-secret-with-32-byte-minimum-length!!"),
     invite_only=False,
+    hibp=_NoHibp(),
 )
 seed_dev_user(_store, _auth)
 
