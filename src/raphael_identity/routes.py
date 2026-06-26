@@ -36,12 +36,22 @@ def login(body: dict[str, Any]) -> dict[str, Any]:
     return {"access_token": result.access_token, "refresh_token": result.refresh_token}
 
 
+@router.post("/verify-key")
+def verify_key(body: dict[str, Any]) -> dict[str, Any]:
+    result = _auth.verify_api_key(body.get("api_key", ""))
+    if not result:
+        raise HTTPException(401, detail={"error": "invalid_key"})
+    return result
+
+
 @router.get("/me")
 def me(authorization: str | None = Header(default=None)) -> dict[str, str]:
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(401, detail={"error": "unauthorized"})
-    # ponytail: full JWT decode deferred; gateway forwards validated context in prod
-    return {"status": "ok", "note": "use /v1/identity/session with gateway-injected headers"}
+    payload = _auth.verify_access_token(authorization[7:])
+    if not payload:
+        raise HTTPException(401, detail={"error": "invalid_token"})
+    return {"user_id": str(payload.get("sub", "usr_default")), "org_id": str(payload.get("org_id", "org_default"))}
 
 
 @router.post("/api-keys")

@@ -30,6 +30,25 @@ def _b64url(data: bytes) -> str:
     return urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
 
 
+def _decode_jwt(token: str, secret: str) -> dict[str, Any] | None:
+    try:
+        header_b64, body_b64, sig_b64 = token.split(".")
+        import base64
+
+        def pad(s: str) -> str:
+            return s + "=" * (-len(s) % 4)
+
+        body = json.loads(base64.urlsafe_b64decode(pad(body_b64)))
+        expected = hmac.new(secret.encode(), f"{header_b64}.{body_b64}".encode(), hashlib.sha256).digest()
+        if _b64url(expected) != sig_b64:
+            return None
+        if body.get("exp", 0) < time.time():
+            return None
+        return body
+    except Exception:
+        return None
+
+
 class AuthService:
     def __init__(self, store: IdentityStore, *, jwt_secret: str, invite_only: bool = False) -> None:
         self.store = store
@@ -86,6 +105,9 @@ class AuthService:
             (self._hash_token(refresh), user_id, time.time() + REFRESH_TTL),
         )
         return AuthTokens(access_token=access, refresh_token=refresh)
+
+    def verify_access_token(self, token: str) -> dict[str, Any] | None:
+        return _decode_jwt(token, self.jwt_secret)
 
     def create_api_key(self, user_id: str, org_id: str, name: str, scopes: list[str] | None = None) -> dict[str, str]:
         raw = f"raph_{secrets.token_urlsafe(32)}"
