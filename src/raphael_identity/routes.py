@@ -8,6 +8,8 @@ from typing import Any
 from fastapi import APIRouter, Header, HTTPException
 
 from raphael_identity.auth import AuthService
+from raphael_identity.models import ApiKeyBody, AuthBody, RegisterBody
+from raphael_identity.seed import seed_dev_user
 from raphael_identity.store import IdentityStore
 
 router = APIRouter(tags=["identity"])
@@ -18,27 +20,28 @@ _auth = AuthService(
     jwt_secret=os.environ.get("RAPHAEL_JWT_SECRET", "dev-secret-with-32-byte-minimum-length!!"),
     invite_only=False,
 )
+seed_dev_user(_store, _auth)
 
 
 @router.post("/register")
-def register(body: dict[str, Any]) -> dict[str, Any]:
-    result = _auth.register(body["email"], body["password"], org_id=body.get("org_id", "org_default"))
+def register(body: RegisterBody) -> dict[str, Any]:
+    result = _auth.register(body.email, body.password, org_id=body.org_id)
     if isinstance(result, dict) and "error" in result:
         raise HTTPException(400, detail=result)
     return {"access_token": result.access_token, "refresh_token": result.refresh_token}
 
 
 @router.post("/login")
-def login(body: dict[str, Any]) -> dict[str, Any]:
-    result = _auth.login(body["email"], body["password"])
+def login(body: AuthBody) -> dict[str, Any]:
+    result = _auth.login(body.email, body.password)
     if isinstance(result, dict) and "error" in result:
         raise HTTPException(401, detail=result)
     return {"access_token": result.access_token, "refresh_token": result.refresh_token}
 
 
 @router.post("/verify-key")
-def verify_key(body: dict[str, Any]) -> dict[str, Any]:
-    result = _auth.verify_api_key(body.get("api_key", ""))
+def verify_key(body: ApiKeyBody) -> dict[str, Any]:
+    result = _auth.verify_api_key(body.api_key)
     if not result:
         raise HTTPException(401, detail={"error": "invalid_key"})
     return result

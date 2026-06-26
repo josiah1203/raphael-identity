@@ -19,4 +19,15 @@ uv sync
 uv run uvicorn raphael_identity.app:app --reload --port 8081
 ```
 
+### Dev seed user
+
+On startup (unless `RAPHAEL_SEED_DEV_USER=false`), a default account is created:
+
+| Field | Default |
+|-------|---------|
+| Email | `dev@raphael.app` |
+| Password | `raphaeldev1` |
+
+Override with `RAPHAEL_DEV_USER_EMAIL` and `RAPHAEL_DEV_USER_PASSWORD`.
+
 Part of the [Raphael Platform](https://github.com/hummingbird-labs) by HummingBird Labs.

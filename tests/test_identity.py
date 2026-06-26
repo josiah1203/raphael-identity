@@ -10,6 +10,13 @@ def test_health() -> None:
     assert client.get("/health").json()["service"] == "raphael-identity"
 
 
+def test_dev_seed_login() -> None:
+    client = TestClient(app)
+    res = client.post("/v1/identity/login", json={"email": "dev@raphael.app", "password": "raphaeldev1"})
+    assert res.status_code == 200
+    assert "access_token" in res.json()
+
+
 def test_register_login() -> None:
     client = TestClient(app)
     reg = client.post("/v1/identity/register", json={"email": "test@raphael.app", "password": "securepass1"})
