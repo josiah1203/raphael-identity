@@ -1,4 +1,4 @@
-"""SQLite store for local/dev; designed for PostgreSQL RLS in production."""
+"""SQLite store for local/dev; PostgreSQL when RAPHAEL_DATABASE_URL is set."""
 
 from __future__ import annotations
 
@@ -11,14 +11,23 @@ class PlatformStore:
     """Persistent store for hosted platform entities."""
 
     def __init__(self, db_path: Path | str) -> None:
-        self.db_path = Path(db_path)
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
-        self._conn.row_factory = sqlite3.Row
-        self._init_schema()
+        from raphael_contracts import db as rdb
+
+        self._postgres = rdb.is_postgres()
+        if self._postgres:
+            rdb.ensure_migrations()
+            self.db_path = Path("postgres")
+        else:
+            self.db_path = Path(db_path)
+            self.db_path.parent.mkdir(parents=True, exist_ok=True)
+            self._conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
+            self._conn.row_factory = sqlite3.Row
+            self._init_schema()
 
     @property
     def conn(self) -> sqlite3.Connection:
+        if self._postgres:
+            raise RuntimeError("conn property is SQLite-only")
         return self._conn
 
     def _init_schema(self) -> None:
@@ -29,6 +38,8 @@ class PlatformStore:
                 org_id TEXT NOT NULL,
                 email TEXT UNIQUE NOT NULL,
                 password_hash TEXT,
+                phone TEXT,
+                phone_verified INTEGER DEFAULT 0,
                 invite_token TEXT,
                 invite_accepted INTEGER DEFAULT 0,
                 mfa_secret TEXT,
@@ -91,20 +102,48 @@ class PlatformStore:
                 redirect_uri TEXT,
                 expires_at REAL NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS invites (
+                id TEXT PRIMARY KEY,
+                org_id TEXT NOT NULL,
+                email TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
             """
         )
         self._conn.commit()
+        self._migrate_users()
 
-    def execute(self, sql: str, params: tuple[Any, ...] = ()) -> sqlite3.Cursor:
+    def _migrate_users(self) -> None:
+        cols = {row[1] for row in self._conn.execute("PRAGMA table_info(users)").fetchall()}
+        if "phone" not in cols:
+            self._conn.execute("ALTER TABLE users ADD COLUMN phone TEXT")
+        if "phone_verified" not in cols:
+            self._conn.execute("ALTER TABLE users ADD COLUMN phone_verified INTEGER DEFAULT 0")
+        self._conn.commit()
+
+    def execute(self, sql: str, params: tuple[Any, ...] = ()) -> Any:
+        if self._postgres:
+            from raphael_contracts.db import pg_execute
+
+            return pg_execute(sql, params)
         cur = self._conn.execute(sql, params)
         self._conn.commit()
         return cur
 
-    def fetchone(self, sql: str, params: tuple[Any, ...] = ()) -> sqlite3.Row | None:
+    def fetchone(self, sql: str, params: tuple[Any, ...] = ()) -> Any | None:
+        if self._postgres:
+            from raphael_contracts.db import pg_fetchone
+
+            return pg_fetchone(sql, params)
         return self._conn.execute(sql, params).fetchone()
 
-    def fetchall(self, sql: str, params: tuple[Any, ...] = ()) -> list[sqlite3.Row]:
+    def fetchall(self, sql: str, params: tuple[Any, ...] = ()) -> list[Any]:
+        if self._postgres:
+            from raphael_contracts.db import pg_fetchall
+
+            return pg_fetchall(sql, params)
         return self._conn.execute(sql, params).fetchall()
 
     def close(self) -> None:
-        self._conn.close()
+        if not self._postgres:
+            self._conn.close()

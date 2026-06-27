@@ -365,15 +365,39 @@ class AuthService:
         self.store.execute("UPDATE users SET mfa_secret = ? WHERE id = ?", (setup.secret, user_id))
         return {"secret": setup.secret, "provisioning_uri": setup.provisioning_uri}
 
-    def setup_webauthn(self, user_id: str) -> dict[str, Any]:
-        cred = self.webauthn.register(user_id)
+    def begin_webauthn_setup(self, user_id: str, email: str) -> dict[str, Any]:
         import json
 
+        return json.loads(self.webauthn.begin_registration(user_id, email))
+
+    def finish_webauthn_setup(
+        self,
+        user_id: str,
+        response: dict[str, Any],
+        *,
+        expected_challenge: str | None = None,
+    ) -> dict[str, Any]:
+        import json
+
+        cred = self.webauthn.finish_registration(
+            response,
+            expected_challenge,
+            user_id=user_id,
+        )
         self.store.execute(
             "UPDATE users SET webauthn_credential = ? WHERE id = ?",
-            (json.dumps({"credential_id": cred.credential_id, "public_key": cred.public_key}), user_id),
+            (
+                json.dumps(
+                    {
+                        "credential_id": cred.credential_id,
+                        "public_key": cred.public_key,
+                        "sign_count": cred.sign_count,
+                    }
+                ),
+                user_id,
+            ),
         )
-        return {"credential_id": cred.credential_id}
+        return {"credential_id": cred.credential_id, "sign_count": cred.sign_count}
 
     def generate_recovery_codes(self, user_id: str, count: int = 8) -> list[str]:
         codes = [secrets.token_hex(4) for _ in range(count)]

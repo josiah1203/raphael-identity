@@ -19,3 +19,7 @@ class ApiKeyBody(BaseModel):
     name: str = "default"
     org_id: str = "org_default"
     user_id: str | None = None
+
+
+class PhoneBody(BaseModel):
+    phone: str = Field(..., min_length=7)
